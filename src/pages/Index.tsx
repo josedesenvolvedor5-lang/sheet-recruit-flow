@@ -4,6 +4,7 @@ import Layout from '@/components/hr/Layout';
 import Dashboard from '@/components/hr/Dashboard';
 import CandidatesPanel from '@/components/hr/CandidatesPanel';
 import TrackingPanel from '@/components/hr/TrackingPanel';
+import StagesPanel from '@/components/hr/StagesPanel';
 import PublicForm from '@/components/hr/PublicForm';
 
 const Index = () => {
@@ -26,12 +27,7 @@ const Index = () => {
           </div>
         );
       case 'stages':
-        return (
-          <div className="text-center p-8">
-            <h2 className="text-2xl font-bold mb-4">Etapas do Processo</h2>
-            <p className="text-muted-foreground">Em desenvolvimento - Configure etapas do processo seletivo</p>
-          </div>
-        );
+        return <StagesPanel />;
       case 'assign':
         return (
           <div className="text-center p-8">
