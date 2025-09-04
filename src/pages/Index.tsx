@@ -5,6 +5,9 @@ import Dashboard from '@/components/hr/Dashboard';
 import CandidatesPanel from '@/components/hr/CandidatesPanel';
 import TrackingPanel from '@/components/hr/TrackingPanel';
 import StagesPanel from '@/components/hr/StagesPanel';
+import JobsPanel from '@/components/hr/JobsPanel';
+import AssignPanel from '@/components/hr/AssignPanel';
+import BatchesPanel from '@/components/hr/BatchesPanel';
 import PublicForm from '@/components/hr/PublicForm';
 
 const Index = () => {
@@ -20,28 +23,13 @@ const Index = () => {
       case 'tracking':
         return <TrackingPanel />;
       case 'jobs':
-        return (
-          <div className="text-center p-8">
-            <h2 className="text-2xl font-bold mb-4">Vagas e Lotes</h2>
-            <p className="text-muted-foreground">Em desenvolvimento - Gerencie vagas e organize lotes</p>
-          </div>
-        );
+        return <JobsPanel />;
       case 'stages':
         return <StagesPanel />;
       case 'assign':
-        return (
-          <div className="text-center p-8">
-            <h2 className="text-2xl font-bold mb-4">Atribuir Etapas</h2>
-            <p className="text-muted-foreground">Em desenvolvimento - Vincule etapas aos lotes</p>
-          </div>
-        );
+        return <AssignPanel />;
       case 'batches':
-        return (
-          <div className="text-center p-8">
-            <h2 className="text-2xl font-bold mb-4">Visualizar Lotes</h2>
-            <p className="text-muted-foreground">Em desenvolvimento - Visualize progresso por lotes</p>
-          </div>
-        );
+        return <BatchesPanel />;
       default:
         return <Dashboard />;
     }
