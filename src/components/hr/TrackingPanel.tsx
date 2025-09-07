@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
+import { useFirebase, Candidate, CandidateStage, CandidateNote } from '@/hooks/useFirebase';
 import { 
   Search, 
   Filter, 
@@ -20,75 +21,112 @@ import {
   Calendar
 } from 'lucide-react';
 
-interface CandidateTracking {
-  id: string;
-  name: string;
-  position: string;
-  currentStage: string;
+interface CandidateTracking extends Candidate {
+  stages: CandidateStage[];
   progress: number;
-  status: 'active' | 'completed' | 'rejected';
-  stages: {
-    id: string;
-    name: string;
-    status: 'completed' | 'current' | 'pending';
-    score?: number;
-    feedback?: string;
-    completedAt?: string;
-  }[];
-  notes: string[];
+  notes: CandidateNote[];
 }
 
 const TrackingPanel: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null);
+  const [candidates, setCandidates] = useState<CandidateTracking[]>([]);
+  const [newNote, setNewNote] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  // Dados simulados para demonstração
-  const candidates: CandidateTracking[] = [
-    {
-      id: '1',
-      name: 'Ana Silva',
-      position: 'Desenvolvedor Frontend',
-      currentStage: 'Entrevista Técnica',
-      progress: 60,
-      status: 'active',
-      stages: [
-        { id: '1', name: 'Triagem Inicial', status: 'completed', score: 85, completedAt: '2024-01-15' },
-        { id: '2', name: 'Entrevista RH', status: 'completed', score: 90, completedAt: '2024-01-16' },
-        { id: '3', name: 'Entrevista Técnica', status: 'current' },
-        { id: '4', name: 'Teste Prático', status: 'pending' },
-        { id: '5', name: 'Entrevista Final', status: 'pending' }
-      ],
-      notes: [
-        'Excelente comunicação na entrevista de RH',
-        'Conhecimento sólido em React e TypeScript'
-      ]
-    },
-    {
-      id: '2',
-      name: 'Carlos Santos',
-      position: 'Designer UX/UI',
-      currentStage: 'Teste Prático',
-      progress: 80,
-      status: 'active',
-      stages: [
-        { id: '1', name: 'Triagem Inicial', status: 'completed', score: 95, completedAt: '2024-01-14' },
-        { id: '2', name: 'Entrevista RH', status: 'completed', score: 88, completedAt: '2024-01-15' },
-        { id: '3', name: 'Entrevista Técnica', status: 'completed', score: 92, completedAt: '2024-01-16' },
-        { id: '4', name: 'Teste Prático', status: 'current' },
-        { id: '5', name: 'Entrevista Final', status: 'pending' }
-      ],
-      notes: [
-        'Portfolio impressionante',
-        'Experiência em design systems'
-      ]
+  const { 
+    getCandidates, 
+    getCandidateStages, 
+    getCandidateNotes, 
+    addCandidateNote,
+    updateCandidateStage,
+    updateCandidate
+  } = useFirebase();
+
+  useEffect(() => {
+    loadCandidatesWithTracking();
+  }, []);
+
+  const loadCandidatesWithTracking = async () => {
+    setLoading(true);
+    try {
+      const candidatesData = await getCandidates();
+      const candidatesWithTracking: CandidateTracking[] = [];
+
+      for (const candidate of candidatesData) {
+        const stages = await getCandidateStages(candidate.id!);
+        const notes = await getCandidateNotes(candidate.id!);
+        
+        const completedStages = stages.filter(s => s.status === 'completed').length;
+        const totalStages = stages.length;
+        const progress = totalStages > 0 ? Math.round((completedStages / totalStages) * 100) : 0;
+
+        candidatesWithTracking.push({
+          ...candidate,
+          stages,
+          notes,
+          progress
+        });
+      }
+
+      setCandidates(candidatesWithTracking);
+    } catch (error) {
+      console.error('Error loading candidates with tracking:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
   const filteredCandidates = candidates.filter(candidate =>
     candidate.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     candidate.position.toLowerCase().includes(searchTerm.toLowerCase()) ||
     candidate.currentStage.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleAddNote = async (candidateId: string) => {
+    if (!newNote.trim()) return;
+    
+    try {
+      await addCandidateNote({
+        candidateId,
+        note: newNote.trim()
+      });
+      setNewNote('');
+      await loadCandidatesWithTracking(); // Recarrega os dados
+    } catch (error) {
+      console.error('Error adding note:', error);
+    }
+  };
+
+  const handleAdvanceStage = async (candidateId: string) => {
+    try {
+      const candidate = candidates.find(c => c.id === candidateId);
+      if (!candidate) return;
+
+      const currentStageIndex = candidate.stages.findIndex(s => s.status === 'current');
+      if (currentStageIndex === -1 || currentStageIndex >= candidate.stages.length - 1) return;
+
+      // Marca a etapa atual como completa
+      await updateCandidateStage(candidate.stages[currentStageIndex].id!, {
+        status: 'completed',
+        completedAt: new Date()
+      });
+
+      // Avança para a próxima etapa
+      await updateCandidateStage(candidate.stages[currentStageIndex + 1].id!, {
+        status: 'current'
+      });
+
+      // Atualiza o currentStage do candidato
+      await updateCandidate(candidateId, {
+        currentStage: candidate.stages[currentStageIndex + 1].stageName
+      });
+
+      await loadCandidatesWithTracking(); // Recarrega os dados
+    } catch (error) {
+      console.error('Error advancing stage:', error);
+    }
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -105,10 +143,12 @@ const TrackingPanel: React.FC = () => {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'active':
-        return <Badge className="bg-primary text-primary-foreground">Ativo</Badge>;
-      case 'completed':
-        return <Badge className="bg-success text-success-foreground">Finalizado</Badge>;
+      case 'pending':
+        return <Badge className="bg-warning text-warning-foreground">Pendente</Badge>;
+      case 'reviewing':
+        return <Badge className="bg-primary text-primary-foreground">Em Análise</Badge>;
+      case 'approved':
+        return <Badge className="bg-success text-success-foreground">Aprovado</Badge>;
       case 'rejected':
         return <Badge variant="destructive">Rejeitado</Badge>;
       default:
@@ -145,26 +185,46 @@ const TrackingPanel: React.FC = () => {
         {/* Lista de Candidatos */}
         <div className="lg:col-span-1 space-y-4">
           <h2 className="text-xl font-semibold">Candidatos em Processo</h2>
-          {filteredCandidates.map((candidate) => (
-            <Card 
-              key={candidate.id} 
-              className={`cursor-pointer shadow-card hover:shadow-elevated transition-all duration-300 ${
-                selectedCandidate === candidate.id ? 'ring-2 ring-primary' : ''
-              }`}
-              onClick={() => setSelectedCandidate(candidate.id)}
-            >
-              <CardContent className="p-4">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-semibold">{candidate.name}</h3>
-                  {getStatusBadge(candidate.status)}
-                </div>
-                <p className="text-sm text-muted-foreground mb-2">{candidate.position}</p>
-                <p className="text-sm font-medium mb-3">{candidate.currentStage}</p>
-                <Progress value={candidate.progress} className="h-2" />
-                <p className="text-xs text-muted-foreground mt-1">{candidate.progress}% concluído</p>
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <Card key={i} className="animate-pulse">
+                  <CardContent className="p-4">
+                    <div className="h-4 bg-muted rounded mb-2"></div>
+                    <div className="h-3 bg-muted rounded w-3/4 mb-2"></div>
+                    <div className="h-3 bg-muted rounded w-1/2"></div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : filteredCandidates.length === 0 ? (
+            <Card>
+              <CardContent className="p-4 text-center">
+                <p className="text-muted-foreground">Nenhum candidato encontrado</p>
               </CardContent>
             </Card>
-          ))}
+          ) : (
+            filteredCandidates.map((candidate) => (
+              <Card 
+                key={candidate.id} 
+                className={`cursor-pointer shadow-card hover:shadow-elevated transition-all duration-300 ${
+                  selectedCandidate === candidate.id ? 'ring-2 ring-primary' : ''
+                }`}
+                onClick={() => setSelectedCandidate(candidate.id!)}
+              >
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-semibold">{candidate.name}</h3>
+                    {getStatusBadge(candidate.status)}
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-2">{candidate.position}</p>
+                  <p className="text-sm font-medium mb-3">{candidate.currentStage}</p>
+                  <Progress value={candidate.progress} className="h-2" />
+                  <p className="text-xs text-muted-foreground mt-1">{candidate.progress}% concluído</p>
+                </CardContent>
+              </Card>
+            ))
+          )}
         </div>
 
         {/* Detalhes do Candidato */}
@@ -208,22 +268,22 @@ const TrackingPanel: React.FC = () => {
                                 <div className="w-px h-8 bg-border mt-2" />
                               )}
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex justify-between items-center mb-1">
-                                <h4 className="font-medium">{stage.name}</h4>
-                                {stage.score && (
-                                  <div className="flex items-center gap-1">
-                                    <Star className="w-4 h-4 text-yellow-500" />
-                                    <span className="text-sm font-medium">{stage.score}%</span>
-                                  </div>
-                                )}
-                              </div>
-                              {stage.completedAt && (
-                                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                  <Calendar className="w-3 h-3" />
-                                  Concluído em {new Date(stage.completedAt).toLocaleDateString('pt-BR')}
-                                </p>
-                              )}
+                             <div className="flex-1 min-w-0">
+                               <div className="flex justify-between items-center mb-1">
+                                 <h4 className="font-medium">{stage.stageName}</h4>
+                                 {stage.score && (
+                                   <div className="flex items-center gap-1">
+                                     <Star className="w-4 h-4 text-yellow-500" />
+                                     <span className="text-sm font-medium">{stage.score}%</span>
+                                   </div>
+                                 )}
+                               </div>
+                               {stage.completedAt && (
+                                 <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                   <Calendar className="w-3 h-3" />
+                                   Concluído em {stage.completedAt.toLocaleDateString('pt-BR')}
+                                 </p>
+                               )}
                               {stage.feedback && (
                                 <p className="text-sm mt-2 p-2 bg-muted rounded">{stage.feedback}</p>
                               )}
@@ -242,20 +302,33 @@ const TrackingPanel: React.FC = () => {
                         Notas e Comentários
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                      {candidate.notes.map((note, index) => (
-                        <div key={index} className="p-3 bg-muted rounded-lg">
-                          <p className="text-sm">{note}</p>
-                        </div>
-                      ))}
-                      
-                      <div className="space-y-2">
-                        <Textarea placeholder="Adicionar nova nota..." rows={3} />
-                        <Button size="sm" className="bg-gradient-primary text-white">
-                          Adicionar Nota
-                        </Button>
-                      </div>
-                    </CardContent>
+                     <CardContent className="space-y-4">
+                       {candidate.notes.map((note) => (
+                         <div key={note.id} className="p-3 bg-muted rounded-lg">
+                           <p className="text-sm">{note.note}</p>
+                           <p className="text-xs text-muted-foreground mt-1">
+                             {note.createdAt.toLocaleDateString('pt-BR')} às {note.createdAt.toLocaleTimeString('pt-BR')}
+                           </p>
+                         </div>
+                       ))}
+                       
+                       <div className="space-y-2">
+                         <Textarea 
+                           placeholder="Adicionar nova nota..." 
+                           rows={3}
+                           value={newNote}
+                           onChange={(e) => setNewNote(e.target.value)}
+                         />
+                         <Button 
+                           size="sm" 
+                           className="bg-gradient-primary text-white"
+                           onClick={() => handleAddNote(candidate.id!)}
+                           disabled={!newNote.trim()}
+                         >
+                           Adicionar Nota
+                         </Button>
+                       </div>
+                     </CardContent>
                   </Card>
 
                   {/* Ações */}
@@ -271,13 +344,14 @@ const TrackingPanel: React.FC = () => {
                         <Button variant="outline" size="sm">
                           Atualizar Status
                         </Button>
-                        <Button 
-                          size="sm" 
-                          className="bg-success hover:bg-success/90 text-success-foreground"
-                        >
-                          Avançar Etapa
-                          <ArrowRight className="w-4 h-4 ml-1" />
-                        </Button>
+                         <Button 
+                           size="sm" 
+                           className="bg-success hover:bg-success/90 text-success-foreground"
+                           onClick={() => handleAdvanceStage(candidate.id!)}
+                         >
+                           Avançar Etapa
+                           <ArrowRight className="w-4 h-4 ml-1" />
+                         </Button>
                       </div>
                     </CardContent>
                   </Card>

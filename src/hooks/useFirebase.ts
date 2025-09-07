@@ -55,6 +55,27 @@ export interface Stage {
   createdAt: Date;
 }
 
+export interface CandidateStage {
+  id: string;
+  candidateId: string;
+  stageId: string;
+  stageName: string;
+  status: 'completed' | 'current' | 'pending';
+  score?: number;
+  feedback?: string;
+  completedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CandidateNote {
+  id?: string;
+  candidateId: string;
+  note: string;
+  createdAt: Date;
+  createdBy?: string;
+}
+
 export const useFirebase = () => {
   const { toast } = useToast();
 
@@ -66,6 +87,10 @@ export const useFirebase = () => {
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       });
+      
+      // Initialize candidate stages
+      await initializeCandidateStages(docRef.id);
+      
       toast({ title: "Candidato adicionado com sucesso!" });
       return docRef.id;
     } catch (error) {
@@ -244,6 +269,114 @@ export const useFirebase = () => {
     return { candidates, loading };
   };
 
+  // Candidate Stages
+  const addCandidateStage = async (stageData: Omit<CandidateStage, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      const docRef = await addDoc(collection(db, 'candidateStages'), {
+        ...stageData,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      });
+      toast({ title: "Etapa do candidato adicionada!" });
+      return docRef.id;
+    } catch (error) {
+      console.error('Error adding candidate stage:', error);
+      toast({ title: "Erro ao adicionar etapa", variant: "destructive" });
+      throw error;
+    }
+  };
+
+  const updateCandidateStage = async (id: string, updates: Partial<CandidateStage>) => {
+    try {
+      await updateDoc(doc(db, 'candidateStages', id), {
+        ...updates,
+        updatedAt: Timestamp.now()
+      });
+      toast({ title: "Etapa atualizada com sucesso!" });
+    } catch (error) {
+      console.error('Error updating candidate stage:', error);
+      toast({ title: "Erro ao atualizar etapa", variant: "destructive" });
+      throw error;
+    }
+  };
+
+  const getCandidateStages = async (candidateId: string): Promise<CandidateStage[]> => {
+    try {
+      const querySnapshot = await getDocs(
+        query(
+          collection(db, 'candidateStages'), 
+          where('candidateId', '==', candidateId),
+          orderBy('createdAt', 'asc')
+        )
+      );
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() || new Date(),
+        updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+        completedAt: doc.data().completedAt?.toDate() || undefined
+      })) as CandidateStage[];
+    } catch (error) {
+      console.error('Error getting candidate stages:', error);
+      toast({ title: "Erro ao carregar etapas do candidato", variant: "destructive" });
+      return [];
+    }
+  };
+
+  // Candidate Notes
+  const addCandidateNote = async (noteData: Omit<CandidateNote, 'id' | 'createdAt'>) => {
+    try {
+      const docRef = await addDoc(collection(db, 'candidateNotes'), {
+        ...noteData,
+        createdAt: Timestamp.now()
+      });
+      toast({ title: "Nota adicionada com sucesso!" });
+      return docRef.id;
+    } catch (error) {
+      console.error('Error adding candidate note:', error);
+      toast({ title: "Erro ao adicionar nota", variant: "destructive" });
+      throw error;
+    }
+  };
+
+  const getCandidateNotes = async (candidateId: string): Promise<CandidateNote[]> => {
+    try {
+      const querySnapshot = await getDocs(
+        query(
+          collection(db, 'candidateNotes'), 
+          where('candidateId', '==', candidateId),
+          orderBy('createdAt', 'desc')
+        )
+      );
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() || new Date()
+      })) as CandidateNote[];
+    } catch (error) {
+      console.error('Error getting candidate notes:', error);
+      toast({ title: "Erro ao carregar notas do candidato", variant: "destructive" });
+      return [];
+    }
+  };
+
+  // Initialize candidate stages when a new candidate is added
+  const initializeCandidateStages = async (candidateId: string) => {
+    try {
+      const stages = await getStages();
+      for (const stage of stages) {
+        await addCandidateStage({
+          candidateId,
+          stageId: stage.id!,
+          stageName: stage.name,
+          status: stage.order === 1 ? 'current' : 'pending'
+        });
+      }
+    } catch (error) {
+      console.error('Error initializing candidate stages:', error);
+    }
+  };
+
   return {
     // Candidates
     addCandidate,
@@ -258,6 +391,14 @@ export const useFirebase = () => {
     // Stages
     addStage,
     getStages,
+    // Candidate Stages
+    addCandidateStage,
+    updateCandidateStage,
+    getCandidateStages,
+    initializeCandidateStages,
+    // Candidate Notes
+    addCandidateNote,
+    getCandidateNotes,
     // Files
     uploadResume
   };
