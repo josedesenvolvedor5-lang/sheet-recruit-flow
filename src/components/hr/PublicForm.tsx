@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { useFirebase } from '@/hooks/useFirebase';
 import heroImage from '@/assets/hr-hero-image.jpg';
 import { 
   User, 
@@ -33,6 +34,7 @@ interface FormData {
 
 const PublicForm: React.FC = () => {
   const { toast } = useToast();
+  const { addCandidate, uploadResume } = useFirebase();
   const [formData, setFormData] = useState<FormData>({
     name: '',
     email: '',
@@ -96,11 +98,26 @@ const PublicForm: React.FC = () => {
     }
 
     try {
-      // Simulação de envio
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Em uma implementação real, aqui seria feita a integração com Google Sheets
-      console.log('Formulário enviado:', formData);
+      // Criar dados do candidato
+      const candidateData = {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        location: `${formData.city}${formData.state ? `, ${formData.state}` : ''}`,
+        position: formData.position,
+        experience: formData.experience,
+        motivation: formData.motivation,
+        status: 'pending' as const,
+        currentStage: 'Análise de Currículo'
+      };
+
+      // Adicionar candidato ao Firebase
+      const candidateId = await addCandidate(candidateData);
+
+      // Upload do currículo se fornecido
+      if (formData.resume && candidateId) {
+        await uploadResume(formData.resume, candidateId);
+      }
       
       setIsSubmitted(true);
       toast({
@@ -108,6 +125,7 @@ const PublicForm: React.FC = () => {
         description: "Obrigado por se candidatar. Entraremos em contato em breve."
       });
     } catch (error) {
+      console.error('Erro no envio:', error);
       toast({
         title: "Erro ao enviar",
         description: "Ocorreu um erro ao enviar sua inscrição. Tente novamente.",

@@ -9,6 +9,7 @@ import JobsPanel from '@/components/hr/JobsPanel';
 import AssignPanel from '@/components/hr/AssignPanel';
 import BatchesPanel from '@/components/hr/BatchesPanel';
 import PublicForm from '@/components/hr/PublicForm';
+import { SeedDataButton } from '@/components/SeedDataButton';
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<'admin' | 'public'>('public');
@@ -64,6 +65,7 @@ const Index = () => {
         </Button>
       </div>
       {renderAdminContent()}
+      <SeedDataButton />
     </Layout>
   );
 };

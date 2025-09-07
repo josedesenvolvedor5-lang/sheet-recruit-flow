@@ -18,66 +18,13 @@ import {
   FileText,
   User
 } from 'lucide-react';
-
-interface Candidate {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  city: string;
-  position: string;
-  status: 'pending' | 'approved' | 'rejected';
-  appliedAt: string;
-  resumeUrl?: string;
-}
+import { useFirebase } from '@/hooks/useFirebase';
 
 const CandidatesPanel: React.FC = () => {
+  const { useCandidatesRealtime, updateCandidate, deleteCandidate } = useFirebase();
+  const { candidates, loading } = useCandidatesRealtime();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-
-  // Dados simulados
-  const candidates: Candidate[] = [
-    {
-      id: '1',
-      name: 'Ana Silva',
-      email: 'ana.silva@email.com',
-      phone: '(11) 99999-9999',
-      city: 'São Paulo',
-      position: 'Desenvolvedor Frontend',
-      status: 'pending',
-      appliedAt: '2024-01-15'
-    },
-    {
-      id: '2',
-      name: 'Carlos Santos',
-      email: 'carlos.santos@email.com',
-      phone: '(21) 88888-8888',
-      city: 'Rio de Janeiro',
-      position: 'Designer UX/UI',
-      status: 'approved',
-      appliedAt: '2024-01-14'
-    },
-    {
-      id: '3',
-      name: 'Maria Oliveira',
-      email: 'maria.oliveira@email.com',
-      phone: '(11) 77777-7777',
-      city: 'São Paulo',
-      position: 'Analista de Marketing',
-      status: 'rejected',
-      appliedAt: '2024-01-13'
-    },
-    {
-      id: '4',
-      name: 'João Costa',
-      email: 'joao.costa@email.com',
-      phone: '(31) 66666-6666',
-      city: 'Belo Horizonte',
-      position: 'Desenvolvedor Backend',
-      status: 'pending',
-      appliedAt: '2024-01-12'
-    }
-  ];
 
   const filteredCandidates = candidates.filter(candidate => {
     const matchesSearch = candidate.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -95,6 +42,8 @@ const CandidatesPanel: React.FC = () => {
         return <Badge className="bg-success text-success-foreground">Aprovado</Badge>;
       case 'rejected':
         return <Badge variant="destructive">Rejeitado</Badge>;
+      case 'reviewing':
+        return <Badge className="bg-primary text-primary-foreground">Em Análise</Badge>;
       case 'pending':
         return <Badge className="bg-warning text-warning-foreground">Pendente</Badge>;
       default:
@@ -102,11 +51,33 @@ const CandidatesPanel: React.FC = () => {
     }
   };
 
-  const handleStatusChange = (candidateId: string, newStatus: 'approved' | 'rejected') => {
-    // Simulação de mudança de status
-    console.log(`Candidato ${candidateId} ${newStatus}`);
-    // Em uma implementação real, aqui seria feita a chamada para a API
+  const handleStatusChange = async (candidateId: string, newStatus: 'approved' | 'rejected' | 'reviewing') => {
+    try {
+      await updateCandidate(candidateId, { status: newStatus });
+    } catch (error) {
+      console.error('Erro ao atualizar status:', error);
+    }
   };
+
+  const handleDeleteCandidate = async (candidateId: string) => {
+    if (window.confirm('Tem certeza que deseja excluir este candidato?')) {
+      try {
+        await deleteCandidate(candidateId);
+      } catch (error) {
+        console.error('Erro ao excluir candidato:', error);
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center py-8">
+          <p className="text-muted-foreground">Carregando candidatos...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -145,6 +116,7 @@ const CandidatesPanel: React.FC = () => {
               <SelectContent>
                 <SelectItem value="all">Todos os Status</SelectItem>
                 <SelectItem value="pending">Pendente</SelectItem>
+                <SelectItem value="reviewing">Em Análise</SelectItem>
                 <SelectItem value="approved">Aprovado</SelectItem>
                 <SelectItem value="rejected">Rejeitado</SelectItem>
               </SelectContent>
@@ -154,11 +126,17 @@ const CandidatesPanel: React.FC = () => {
       </Card>
 
       {/* Statistics */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <Card className="shadow-card">
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold text-warning">{candidates.filter(c => c.status === 'pending').length}</p>
             <p className="text-sm text-muted-foreground">Pendentes</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-card">
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-primary">{candidates.filter(c => c.status === 'reviewing').length}</p>
+            <p className="text-sm text-muted-foreground">Em Análise</p>
           </CardContent>
         </Card>
         <Card className="shadow-card">
@@ -198,15 +176,16 @@ const CandidatesPanel: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <MapPin className="w-4 h-4" />
-                      {candidate.city}
+                      {candidate.location}
                     </div>
                     <div className="flex items-center gap-2">
                       <Calendar className="w-4 h-4" />
-                      {new Date(candidate.appliedAt).toLocaleDateString('pt-BR')}
+                      {candidate.createdAt?.toLocaleDateString?.('pt-BR') || 'Data não disponível'}
                     </div>
                   </div>
                   
                   <p className="text-sm font-medium mt-2">Vaga: {candidate.position}</p>
+                  <p className="text-sm text-muted-foreground mt-1">Etapa atual: {candidate.currentStage}</p>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
@@ -214,17 +193,29 @@ const CandidatesPanel: React.FC = () => {
                     <Eye className="w-4 h-4 mr-2" />
                     Ver Detalhes
                   </Button>
-                  <Button variant="outline" size="sm">
-                    <FileText className="w-4 h-4 mr-2" />
-                    Currículo
-                  </Button>
+                  {candidate.resumeUrl && (
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={candidate.resumeUrl} target="_blank" rel="noopener noreferrer">
+                        <FileText className="w-4 h-4 mr-2" />
+                        Currículo
+                      </a>
+                    </Button>
+                  )}
                   
                   {candidate.status === 'pending' && (
                     <>
                       <Button
                         size="sm"
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                        onClick={() => handleStatusChange(candidate.id!, 'reviewing')}
+                      >
+                        <Eye className="w-4 h-4 mr-2" />
+                        Analisar
+                      </Button>
+                      <Button
+                        size="sm"
                         className="bg-success hover:bg-success/90 text-success-foreground"
-                        onClick={() => handleStatusChange(candidate.id, 'approved')}
+                        onClick={() => handleStatusChange(candidate.id!, 'approved')}
                       >
                         <UserCheck className="w-4 h-4 mr-2" />
                         Aprovar
@@ -232,13 +223,43 @@ const CandidatesPanel: React.FC = () => {
                       <Button
                         variant="destructive"
                         size="sm"
-                        onClick={() => handleStatusChange(candidate.id, 'rejected')}
+                        onClick={() => handleStatusChange(candidate.id!, 'rejected')}
                       >
                         <UserX className="w-4 h-4 mr-2" />
                         Rejeitar
                       </Button>
                     </>
                   )}
+                  
+                  {candidate.status === 'reviewing' && (
+                    <>
+                      <Button
+                        size="sm"
+                        className="bg-success hover:bg-success/90 text-success-foreground"
+                        onClick={() => handleStatusChange(candidate.id!, 'approved')}
+                      >
+                        <UserCheck className="w-4 h-4 mr-2" />
+                        Aprovar
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleStatusChange(candidate.id!, 'rejected')}
+                      >
+                        <UserX className="w-4 h-4 mr-2" />
+                        Rejeitar
+                      </Button>
+                    </>
+                  )}
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDeleteCandidate(candidate.id!)}
+                    className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                  >
+                    Excluir
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -252,7 +273,10 @@ const CandidatesPanel: React.FC = () => {
             <User className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">Nenhum candidato encontrado</h3>
             <p className="text-muted-foreground">
-              Tente ajustar os filtros ou aguarde novas inscrições.
+              {candidates.length === 0 
+                ? "Ainda não há candidatos cadastrados. Aguarde novas inscrições."
+                : "Tente ajustar os filtros de busca."
+              }
             </p>
           </CardContent>
         </Card>
