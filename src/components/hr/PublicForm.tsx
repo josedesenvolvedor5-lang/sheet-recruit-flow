@@ -14,7 +14,7 @@ import {
   Phone, 
   MapPin, 
   Briefcase, 
-  Upload, 
+  Link, 
   Send,
   CheckCircle,
   Building2
@@ -29,12 +29,12 @@ interface FormData {
   position: string;
   experience: string;
   motivation: string;
-  resume?: File;
+  resumeUrl: string;
 }
 
 const PublicForm: React.FC = () => {
   const { toast } = useToast();
-  const { addCandidate, uploadResume } = useFirebase();
+  const { addCandidate } = useFirebase();
   const [formData, setFormData] = useState<FormData>({
     name: '',
     email: '',
@@ -43,7 +43,8 @@ const PublicForm: React.FC = () => {
     state: '',
     position: '',
     experience: '',
-    motivation: ''
+    motivation: '',
+    resumeUrl: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -69,18 +70,6 @@ const PublicForm: React.FC = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && file.type === 'application/pdf') {
-      setFormData(prev => ({ ...prev, resume: file }));
-    } else {
-      toast({
-        title: "Formato inválido",
-        description: "Por favor, envie apenas arquivos PDF.",
-        variant: "destructive"
-      });
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,17 +96,13 @@ const PublicForm: React.FC = () => {
         position: formData.position,
         experience: formData.experience,
         motivation: formData.motivation,
+        resumeUrl: formData.resumeUrl,
         status: 'pending' as const,
         currentStage: 'Análise de Currículo'
       };
 
       // Adicionar candidato ao Firebase
-      const candidateId = await addCandidate(candidateData);
-
-      // Upload do currículo se fornecido
-      if (formData.resume && candidateId) {
-        await uploadResume(formData.resume, candidateId);
-      }
+      await addCandidate(candidateData);
       
       setIsSubmitted(true);
       toast({
@@ -149,14 +134,14 @@ const PublicForm: React.FC = () => {
               Sua candidatura foi recebida com sucesso. Nossa equipe de RH analisará 
               seu perfil e entraremos em contato em breve.
             </p>
-            <Button 
-              onClick={() => {
-                setIsSubmitted(false);
-                setFormData({
-                  name: '', email: '', phone: '', city: '', state: '', 
-                  position: '', experience: '', motivation: ''
-                });
-              }}
+              <Button 
+                onClick={() => {
+                  setIsSubmitted(false);
+                  setFormData({
+                    name: '', email: '', phone: '', city: '', state: '', 
+                    position: '', experience: '', motivation: '', resumeUrl: ''
+                  });
+                }}
               className="bg-gradient-primary text-white"
             >
               Nova Candidatura
@@ -303,29 +288,19 @@ const PublicForm: React.FC = () => {
                 </div>
               </div>
 
-              {/* Upload de Currículo */}
+              {/* URL do Currículo */}
               <div className="space-y-2">
-                <Label htmlFor="resume">Currículo (PDF)</Label>
-                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:bg-accent/50 transition-colors">
-                  <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-                  <Input
-                    id="resume"
-                    type="file"
-                    accept=".pdf"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <Label htmlFor="resume" className="cursor-pointer">
-                    {formData.resume ? (
-                      <span className="text-success font-medium">{formData.resume.name}</span>
-                    ) : (
-                      <>
-                        <span className="font-medium">Clique para enviar seu currículo</span>
-                        <p className="text-sm text-muted-foreground mt-1">Apenas arquivos PDF (máx. 5MB)</p>
-                      </>
-                    )}
-                  </Label>
-                </div>
+                <Label htmlFor="resumeUrl">URL do Currículo</Label>
+                <Input
+                  id="resumeUrl"
+                  type="url"
+                  value={formData.resumeUrl}
+                  onChange={(e) => handleInputChange('resumeUrl', e.target.value)}
+                  placeholder="https://drive.google.com/file/d/... ou link do seu currículo"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Cole aqui o link do seu currículo (Google Drive, Dropbox, etc.)
+                </p>
               </div>
 
               {/* Submit Button */}
