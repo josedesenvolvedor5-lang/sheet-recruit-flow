@@ -75,7 +75,7 @@ const PublicForm: React.FC = () => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Validação básica
+  // Validação básica
     if (!formData.name || !formData.email || !formData.phone || !formData.position) {
       toast({
         title: "Campos obrigatórios",
@@ -86,17 +86,29 @@ const PublicForm: React.FC = () => {
       return;
     }
 
+    // Validar email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast({
+        title: "Email inválido",
+        description: "Por favor, insira um email válido.",
+        variant: "destructive"
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       // Criar dados do candidato
       const candidateData = {
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        location: `${formData.city}${formData.state ? `, ${formData.state}` : ''}`,
+        name: formData.name.trim(),
+        email: formData.email.trim().toLowerCase(),
+        phone: formData.phone.trim(),
+        location: `${formData.city}${formData.state ? `, ${formData.state}` : ''}`.trim(),
         position: formData.position,
-        experience: formData.experience,
-        motivation: formData.motivation,
-        resumeUrl: formData.resumeUrl,
+        experience: formData.experience.trim(),
+        motivation: formData.motivation.trim(),
+        resumeUrl: formData.resumeUrl.trim(),
         status: 'pending' as const,
         currentStage: 'Análise de Currículo'
       };

@@ -10,6 +10,7 @@ import AssignPanel from '@/components/hr/AssignPanel';
 import BatchesPanel from '@/components/hr/BatchesPanel';
 import PublicForm from '@/components/hr/PublicForm';
 import { SeedDataButton } from '@/components/SeedDataButton';
+import FirebaseTest from '@/components/FirebaseTest';
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<'admin' | 'public'>('public');
@@ -39,7 +40,7 @@ const Index = () => {
   if (currentView === 'public') {
     return (
       <div>
-        <div className="absolute top-4 right-4 z-10">
+        <div className="absolute top-4 right-4 z-10 space-x-2">
           <Button
             variant="outline"
             onClick={() => setCurrentView('admin')}
@@ -48,6 +49,9 @@ const Index = () => {
             Painel Admin
           </Button>
         </div>
+        <div className="absolute top-4 left-4 z-10">
+          <FirebaseTest />
+        </div>
         <PublicForm />
       </div>
     );
@@ -55,17 +59,18 @@ const Index = () => {
 
   return (
     <Layout currentTab={currentTab} onTabChange={setCurrentTab}>
-      <div className="mb-4">
+      <div className="mb-4 flex justify-between items-center">
+        <div>
+          <SeedDataButton />
+        </div>
         <Button
           variant="outline"
           onClick={() => setCurrentView('public')}
-          className="float-right"
         >
           Ver Formulário Público
         </Button>
       </div>
       {renderAdminContent()}
-      <SeedDataButton />
     </Layout>
   );
 };

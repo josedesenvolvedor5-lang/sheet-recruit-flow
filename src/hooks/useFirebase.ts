@@ -82,20 +82,31 @@ export const useFirebase = () => {
   // Candidates
   const addCandidate = async (candidateData: Omit<Candidate, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
+      console.log('Adicionando candidato:', candidateData);
       const docRef = await addDoc(collection(db, 'candidates'), {
         ...candidateData,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       });
       
-      // Initialize candidate stages
-      await initializeCandidateStages(docRef.id);
+      console.log('Candidato adicionado com ID:', docRef.id);
+      
+      // Initialize candidate stages only if stages exist
+      try {
+        await initializeCandidateStages(docRef.id);
+      } catch (stageError) {
+        console.warn('Erro ao inicializar etapas do candidato:', stageError);
+      }
       
       toast({ title: "Candidato adicionado com sucesso!" });
       return docRef.id;
     } catch (error) {
       console.error('Error adding candidate:', error);
-      toast({ title: "Erro ao adicionar candidato", variant: "destructive" });
+      toast({ 
+        title: "Erro ao adicionar candidato", 
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive" 
+      });
       throw error;
     }
   };
