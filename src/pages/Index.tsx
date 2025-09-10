@@ -8,13 +8,11 @@ import StagesPanel from '@/components/hr/StagesPanel';
 import JobsPanel from '@/components/hr/JobsPanel';
 import AssignPanel from '@/components/hr/AssignPanel';
 import BatchesPanel from '@/components/hr/BatchesPanel';
-import PublicForm from '@/components/hr/PublicForm';
 import { SeedDataButton } from '@/components/SeedDataButton';
 import FirebaseTest from '@/components/FirebaseTest';
 
 const Index = () => {
-  const [currentView, setCurrentView] = useState<'admin' | 'public'>('public');
-  const [currentTab, setCurrentTab] = useState('dashboard');
+  const [currentTab, setCurrentTab] = useState('candidates');
 
   const renderAdminContent = () => {
     switch (currentTab) {
@@ -37,38 +35,15 @@ const Index = () => {
     }
   };
 
-  if (currentView === 'public') {
-    return (
-      <div>
-        <div className="absolute top-4 right-4 z-10 space-x-2">
-          <Button
-            variant="outline"
-            onClick={() => setCurrentView('admin')}
-            className="bg-white/90 backdrop-blur-sm"
-          >
-            Painel Admin
-          </Button>
-        </div>
-        <div className="absolute top-4 left-4 z-10">
-          <FirebaseTest />
-        </div>
-        <PublicForm />
-      </div>
-    );
-  }
-
   return (
     <Layout currentTab={currentTab} onTabChange={setCurrentTab}>
       <div className="mb-4 flex justify-between items-center">
         <div>
           <SeedDataButton />
         </div>
-        <Button
-          variant="outline"
-          onClick={() => setCurrentView('public')}
-        >
-          Ver Formulário Público
-        </Button>
+        <div className="absolute top-4 left-4 z-10">
+          <FirebaseTest />
+        </div>
       </div>
       {renderAdminContent()}
     </Layout>
