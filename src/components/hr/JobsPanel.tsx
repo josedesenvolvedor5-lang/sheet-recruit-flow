@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ import {
   Target
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useFirebase } from '@/hooks/useFirebase';
 
 interface Job {
   id: string;
@@ -54,39 +55,10 @@ interface Batch {
 
 const JobsPanel = () => {
   const { toast } = useToast();
+  const { addJob, getJobs, updateJob, deleteJob } = useFirebase();
   const [activeTab, setActiveTab] = useState('jobs');
-  const [jobs, setJobs] = useState<Job[]>([
-    {
-      id: '1',
-      title: 'Desenvolvedor Frontend React',
-      description: 'Desenvolvedor especializado em React para projetos web modernos',
-      department: 'Tecnologia',
-      location: 'São Paulo - SP',
-      type: 'full-time',
-      level: 'mid',
-      salary: 'R$ 8.000 - R$ 12.000',
-      requirements: 'React, TypeScript, 3+ anos experiência',
-      benefits: 'Vale refeição, plano de saúde, home office',
-      isActive: true,
-      createdAt: '2024-01-15',
-      applications: 45
-    },
-    {
-      id: '2',
-      title: 'Analista de RH Sênior',
-      description: 'Responsável por recrutamento e seleção de talentos',
-      department: 'Recursos Humanos',
-      location: 'Remote',
-      type: 'full-time',
-      level: 'senior',
-      salary: 'R$ 6.000 - R$ 9.000',
-      requirements: 'Psicologia/RH, 5+ anos experiência',
-      benefits: 'Flexibilidade de horário, desenvolvimento pessoal',
-      isActive: true,
-      createdAt: '2024-01-20',
-      applications: 28
-    }
-  ]);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [batches, setBatches] = useState<Batch[]>([
     {
@@ -141,6 +113,43 @@ const JobsPanel = () => {
     description: ''
   });
 
+  // Carregar vagas do Firebase
+  useEffect(() => {
+    const loadJobs = async () => {
+      try {
+        setLoading(true);
+        const jobsData = await getJobs();
+        const formattedJobs = jobsData.map(job => ({
+          id: job.id!,
+          title: job.title,
+          description: job.description,
+          department: job.department || '',
+          location: job.location || '',
+          type: job.type,
+          level: job.level || 'mid',
+          salary: job.salary || '',
+          requirements: Array.isArray(job.requirements) ? job.requirements.join(', ') : '',
+          benefits: job.benefits || '',
+          isActive: job.status === 'open',
+          createdAt: job.createdAt.toISOString().split('T')[0],
+          applications: 0 // Pode ser calculado posteriormente
+        }));
+        setJobs(formattedJobs);
+      } catch (error) {
+        console.error('Erro ao carregar vagas:', error);
+        toast({
+          title: "Erro",
+          description: "Erro ao carregar vagas",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadJobs();
+  }, [getJobs, toast]);
+
   const typeLabels = {
     'full-time': 'Integral',
     'part-time': 'Meio período',
@@ -169,7 +178,7 @@ const JobsPanel = () => {
     'cancelled': 'destructive'
   } as const;
 
-  const handleCreateJob = () => {
+  const handleCreateJob = async () => {
     if (!jobFormData.title.trim()) {
       toast({
         title: "Erro",
@@ -179,22 +188,57 @@ const JobsPanel = () => {
       return;
     }
 
-    const newJob: Job = {
-      id: Date.now().toString(),
-      ...jobFormData,
-      isActive: true,
-      createdAt: new Date().toISOString().split('T')[0],
-      applications: 0
-    };
+    try {
+      const jobData = {
+        title: jobFormData.title,
+        description: jobFormData.description,
+        department: jobFormData.department,
+        location: jobFormData.location,
+        type: jobFormData.type,
+        level: jobFormData.level,
+        salary: jobFormData.salary,
+        requirements: jobFormData.requirements.split(',').map(req => req.trim()).filter(req => req),
+        benefits: jobFormData.benefits,
+        status: 'open' as const
+      };
 
-    setJobs([...jobs, newJob]);
-    setJobFormData({ title: '', description: '', department: '', location: '', type: 'full-time', level: 'mid', salary: '', requirements: '', benefits: '' });
-    setIsJobDialogOpen(false);
-    
-    toast({
-      title: "Sucesso",
-      description: "Vaga criada com sucesso"
-    });
+      if (editingJob) {
+        await updateJob(editingJob.id, jobData);
+        const updatedJobs = jobs.map(job => 
+          job.id === editingJob.id ? { ...job, ...jobFormData, isActive: true } : job
+        );
+        setJobs(updatedJobs);
+        toast({
+          title: "Sucesso",
+          description: "Vaga atualizada com sucesso"
+        });
+      } else {
+        const newJobId = await addJob(jobData);
+        const newJob: Job = {
+          id: newJobId,
+          ...jobFormData,
+          isActive: true,
+          createdAt: new Date().toISOString().split('T')[0],
+          applications: 0
+        };
+        setJobs([...jobs, newJob]);
+        toast({
+          title: "Sucesso",
+          description: "Vaga criada com sucesso"
+        });
+      }
+
+      setJobFormData({ title: '', description: '', department: '', location: '', type: 'full-time', level: 'mid', salary: '', requirements: '', benefits: '' });
+      setEditingJob(null);
+      setIsJobDialogOpen(false);
+    } catch (error) {
+      console.error('Erro ao salvar vaga:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao salvar vaga",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleCreateBatch = () => {
@@ -226,12 +270,22 @@ const JobsPanel = () => {
     });
   };
 
-  const handleDeleteJob = (jobId: string) => {
-    setJobs(jobs.filter(job => job.id !== jobId));
-    toast({
-      title: "Sucesso",
-      description: "Vaga removida com sucesso"
-    });
+  const handleDeleteJob = async (jobId: string) => {
+    try {
+      await deleteJob(jobId);
+      setJobs(jobs.filter(job => job.id !== jobId));
+      toast({
+        title: "Sucesso",
+        description: "Vaga removida com sucesso"
+      });
+    } catch (error) {
+      console.error('Erro ao deletar vaga:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao deletar vaga",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleDeleteBatch = (batchId: string) => {
@@ -420,7 +474,16 @@ const JobsPanel = () => {
           </div>
 
           <div className="grid gap-4">
-            {jobs.map((job) => (
+            {loading ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">Carregando vagas...</p>
+              </div>
+            ) : jobs.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">Nenhuma vaga cadastrada</p>
+              </div>
+            ) : (
+              jobs.map((job) => (
               <Card key={job.id}>
                 <CardContent className="p-6">
                   <div className="flex justify-between items-start">
@@ -486,7 +549,8 @@ const JobsPanel = () => {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            ))
+            )}
           </div>
         </TabsContent>
 

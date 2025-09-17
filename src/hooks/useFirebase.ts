@@ -38,9 +38,11 @@ export interface Job {
   department: string;
   location: string;
   type: 'full-time' | 'part-time' | 'contract' | 'intern';
+  level?: 'junior' | 'mid' | 'senior' | 'lead';
   status: 'open' | 'closed' | 'draft';
   description: string;
   requirements: string[];
+  benefits?: string;
   salary?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -199,6 +201,17 @@ export const useFirebase = () => {
     } catch (error) {
       console.error('Error updating job:', error);
       toast({ title: "Erro ao atualizar vaga", variant: "destructive" });
+      throw error;
+    }
+  };
+
+  const deleteJob = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'jobs', id));
+      toast({ title: "Vaga removida com sucesso!" });
+    } catch (error) {
+      console.error('Error deleting job:', error);
+      toast({ title: "Erro ao remover vaga", variant: "destructive" });
       throw error;
     }
   };
@@ -399,6 +412,7 @@ export const useFirebase = () => {
     addJob,
     getJobs,
     updateJob,
+    deleteJob,
     // Stages
     addStage,
     getStages,
