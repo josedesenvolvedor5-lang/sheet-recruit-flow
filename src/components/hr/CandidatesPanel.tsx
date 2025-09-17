@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,12 +25,13 @@ import {
 import { useFirebase } from '@/hooks/useFirebase';
 
 const CandidatesPanel: React.FC = () => {
-  const { useCandidatesRealtime, updateCandidate, deleteCandidate, addCandidate } = useFirebase();
+  const { useCandidatesRealtime, updateCandidate, deleteCandidate, addCandidate, getJobs } = useFirebase();
   const { candidates, loading } = useCandidatesRealtime();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [availableJobs, setAvailableJobs] = useState<{id: string, title: string}[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -43,16 +44,23 @@ const CandidatesPanel: React.FC = () => {
     resumeUrl: ''
   });
 
-  const availablePositions = [
-    'Desenvolvedor Frontend',
-    'Desenvolvedor Backend', 
-    'Desenvolvedor Fullstack',
-    'Designer UX/UI',
-    'Analista de Marketing',
-    'Gerente de Projetos',
-    'Analista de Dados',
-    'DevOps Engineer'
-  ];
+  // Carregar vagas disponíveis
+  useEffect(() => {
+    const loadJobs = async () => {
+      try {
+        const jobs = await getJobs();
+        const activeJobs = jobs.filter(job => job.status === 'open').map(job => ({
+          id: job.id!,
+          title: job.title
+        }));
+        setAvailableJobs(activeJobs);
+      } catch (error) {
+        console.error('Erro ao carregar vagas:', error);
+      }
+    };
+    
+    loadJobs();
+  }, [getJobs]);
 
   const brazilianStates = [
     'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 
@@ -257,8 +265,8 @@ const CandidatesPanel: React.FC = () => {
                       <SelectValue placeholder="Selecione a vaga" />
                     </SelectTrigger>
                     <SelectContent>
-                      {availablePositions.map(position => (
-                        <SelectItem key={position} value={position}>{position}</SelectItem>
+                      {availableJobs.map(job => (
+                        <SelectItem key={job.id} value={job.title}>{job.title}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
