@@ -148,7 +148,7 @@ const JobsPanel = () => {
     };
 
     loadJobs();
-  }, [getJobs, toast]);
+  }, []); // Removidas as dependências para evitar loop
 
   const typeLabels = {
     'full-time': 'Integral',
