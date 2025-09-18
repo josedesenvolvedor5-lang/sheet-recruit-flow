@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -9,31 +9,51 @@ import {
   Clock, 
   MapPin,
   TrendingUp,
-  Target
+  Target,
+  Briefcase
 } from 'lucide-react';
+import { useFirebase } from '@/hooks/useFirebase';
 
 const Dashboard: React.FC = () => {
-  // Dados simulados para demonstração
-  const stats = {
-    totalCandidates: 247,
-    approved: 89,
-    rejected: 42,
-    pending: 116
-  };
+  const { getDashboardStats } = useFirebase();
+  const [loading, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState({
+    stats: { totalCandidates: 0, approved: 0, rejected: 0, pending: 0 },
+    regionData: [],
+    processStages: [],
+    totalJobs: 0,
+    activeJobs: 0
+  });
 
-  const regionData = [
-    { region: 'São Paulo', candidates: 89, percentage: 36 },
-    { region: 'Rio de Janeiro', candidates: 62, percentage: 25 },
-    { region: 'Minas Gerais', candidates: 43, percentage: 17 },
-    { region: 'Outros', candidates: 53, percentage: 22 }
-  ];
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true);
+        const data = await getDashboardStats();
+        setDashboardData(data);
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const processStages = [
-    { stage: 'Triagem', candidates: 116, completion: 70 },
-    { stage: 'Entrevista', candidates: 78, completion: 85 },
-    { stage: 'Teste Técnico', candidates: 45, completion: 60 },
-    { stage: 'Finalização', candidates: 28, completion: 95 }
-  ];
+    loadDashboardData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="text-lg font-medium">Carregando dashboard...</div>
+        </div>
+      </div>
+    );
+  }
+
+  const { stats, regionData, processStages, totalJobs, activeJobs } = dashboardData;
+  const approvalRate = stats.totalCandidates > 0 ? Math.round((stats.approved / stats.totalCandidates) * 100) : 0;
+  const pendingRate = stats.totalCandidates > 0 ? Math.round((stats.pending / stats.totalCandidates) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -44,7 +64,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card className="shadow-card hover:shadow-elevated transition-all duration-300">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -96,6 +116,20 @@ const Dashboard: React.FC = () => {
               </div>
               <div className="bg-warning-light p-3 rounded-full">
                 <Clock className="w-6 h-6 text-warning" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-card hover:shadow-elevated transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-muted-foreground text-sm">Vagas Ativas</p>
+                <p className="text-3xl font-bold text-primary">{activeJobs}</p>
+              </div>
+              <div className="bg-primary/10 p-3 rounded-full">
+                <Briefcase className="w-6 h-6 text-primary" />
               </div>
             </div>
           </CardContent>
@@ -176,15 +210,15 @@ const Dashboard: React.FC = () => {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="text-center p-4 bg-gradient-success rounded-lg text-white">
-              <p className="text-2xl font-bold">36%</p>
+              <p className="text-2xl font-bold">{approvalRate}%</p>
               <p className="text-sm opacity-90">Taxa de Aprovação</p>
             </div>
             <div className="text-center p-4 bg-gradient-primary rounded-lg text-white">
-              <p className="text-2xl font-bold">7.2 dias</p>
-              <p className="text-sm opacity-90">Tempo Médio do Processo</p>
+              <p className="text-2xl font-bold">{totalJobs}</p>
+              <p className="text-sm opacity-90">Total de Vagas</p>
             </div>
             <div className="text-center p-4 bg-yellow-500 rounded-lg text-white">
-              <p className="text-2xl font-bold">47%</p>
+              <p className="text-2xl font-bold">{pendingRate}%</p>
               <p className="text-sm opacity-90">Taxa de Pendência</p>
             </div>
           </div>

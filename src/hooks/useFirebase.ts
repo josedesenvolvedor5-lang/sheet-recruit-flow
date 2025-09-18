@@ -263,6 +263,29 @@ export const useFirebase = () => {
     }
   };
 
+// Add updateStage function to Firebase hook
+const updateStage = async (id: string, updates: Partial<Stage>) => {
+  try {
+    await updateDoc(doc(db, 'stages', id), updates);
+    toast({ title: "Etapa atualizada com sucesso!" });
+  } catch (error) {
+    console.error('Error updating stage:', error);
+    toast({ title: "Erro ao atualizar etapa", variant: "destructive" });
+    throw error;
+  }
+};
+
+const deleteStage = async (id: string) => {
+  try {
+    await deleteDoc(doc(db, 'stages', id));
+    toast({ title: "Etapa removida com sucesso!" });
+  } catch (error) {
+    console.error('Error deleting stage:', error);
+    toast({ title: "Erro ao remover etapa", variant: "destructive" });
+    throw error;
+  }
+};
+
   // File upload
   const uploadResume = async (file: File, candidateId: string): Promise<string> => {
     try {
@@ -473,6 +496,47 @@ export const useFirebase = () => {
     }
   };
 
+  // Get dashboard statistics
+  const getDashboardStats = async () => {
+    try {
+      const candidates = await getCandidates();
+      const jobs = await getJobs();
+      const stages = await getStages();
+      
+      // Calculate basic stats
+      const totalCandidates = candidates.length;
+      const approved = candidates.filter(c => c.status === 'approved').length;
+      const rejected = candidates.filter(c => c.status === 'rejected').length;
+      const pending = candidates.filter(c => c.status === 'pending').length;
+      
+      // Calculate location stats (mock for now since we don't have location data)
+      const regionData = [
+        { region: 'São Paulo', candidates: Math.floor(totalCandidates * 0.36), percentage: 36 },
+        { region: 'Rio de Janeiro', candidates: Math.floor(totalCandidates * 0.25), percentage: 25 },
+        { region: 'Minas Gerais', candidates: Math.floor(totalCandidates * 0.17), percentage: 17 },
+        { region: 'Outros', candidates: Math.floor(totalCandidates * 0.22), percentage: 22 }
+      ];
+      
+      // Calculate stage progress based on candidate stages
+      const processStages = stages.map(stage => ({
+        stage: stage.name,
+        candidates: Math.floor(Math.random() * totalCandidates * 0.5) + 10, // Mock for now
+        completion: Math.floor(Math.random() * 40) + 60 // Mock completion rate
+      }));
+      
+      return {
+        stats: { totalCandidates, approved, rejected, pending },
+        regionData,
+        processStages,
+        totalJobs: jobs.length,
+        activeJobs: jobs.filter(j => j.status === 'open').length
+      };
+    } catch (error) {
+      console.error('Error getting dashboard stats:', error);
+      throw error;
+    }
+  };
+
   return {
     // Candidates
     addCandidate,
@@ -488,6 +552,8 @@ export const useFirebase = () => {
     // Stages
     addStage,
     getStages,
+    updateStage,
+    deleteStage,
     // Candidate Stages
     addCandidateStage,
     updateCandidateStage,
@@ -501,6 +567,8 @@ export const useFirebase = () => {
     getBatches,
     updateBatch,
     deleteBatch,
+    // Dashboard
+    getDashboardStats,
     // Files
     uploadResume
   };

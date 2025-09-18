@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,22 +17,8 @@ import {
   ArrowRight,
   Plus
 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-
-interface Stage {
-  id: string;
-  name: string;
-  type: 'screening' | 'interview' | 'test' | 'assessment' | 'final';
-  duration: number;
-  isActive: boolean;
-}
-
-interface Batch {
-  id: string;
-  name: string;
-  jobTitle: string;
-  status: 'planned' | 'active' | 'completed' | 'cancelled';
-}
+import { useFirebase } from '@/hooks/useFirebase';
+import type { Stage, Batch } from '@/hooks/useFirebase';
 
 interface Assignment {
   id: string;
@@ -46,57 +32,34 @@ interface Assignment {
 }
 
 const AssignPanel = () => {
-  const { toast } = useToast();
-  const [assignments, setAssignments] = useState<Assignment[]>([
-    {
-      id: '1',
-      batchId: '1',
-      stageId: '1',
-      batchName: 'Lote Frontend Q1 2024',
-      stageName: 'Triagem Inicial',
-      jobTitle: 'Desenvolvedor Frontend React',
-      order: 1,
-      isActive: true
-    },
-    {
-      id: '2',
-      batchId: '1',
-      stageId: '2',
-      batchName: 'Lote Frontend Q1 2024',
-      stageName: 'Entrevista com RH',
-      jobTitle: 'Desenvolvedor Frontend React',
-      order: 2,
-      isActive: true
-    },
-    {
-      id: '3',
-      batchId: '1',
-      stageId: '3',
-      batchName: 'Lote Frontend Q1 2024',
-      stageName: 'Teste Técnico',
-      jobTitle: 'Desenvolvedor Frontend React',
-      order: 3,
-      isActive: true
-    }
-  ]);
-
-  // Mock data - would come from other components
-  const stages: Stage[] = [
-    { id: '1', name: 'Triagem Inicial', type: 'screening', duration: 2, isActive: true },
-    { id: '2', name: 'Entrevista com RH', type: 'interview', duration: 5, isActive: true },
-    { id: '3', name: 'Teste Técnico', type: 'test', duration: 7, isActive: true },
-    { id: '4', name: 'Entrevista Técnica', type: 'interview', duration: 3, isActive: true },
-    { id: '5', name: 'Aprovação Final', type: 'final', duration: 2, isActive: true }
-  ];
-
-  const batches: Batch[] = [
-    { id: '1', name: 'Lote Frontend Q1 2024', jobTitle: 'Desenvolvedor Frontend React', status: 'active' },
-    { id: '2', name: 'Lote RH Expansion', jobTitle: 'Analista de RH Sênior', status: 'active' }
-  ];
-
+  const { getStages, getBatches } = useFirebase();
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [stages, setStages] = useState<Stage[]>([]);
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedBatch, setSelectedBatch] = useState<string>('');
   const [selectedStages, setSelectedStages] = useState<string[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [stagesData, batchesData] = await Promise.all([
+        getStages(),
+        getBatches()
+      ]);
+      setStages(stagesData);
+      setBatches(batchesData);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const stageTypeIcons = {
     screening: FileText,
@@ -108,7 +71,7 @@ const AssignPanel = () => {
 
   const stageTypeLabels = {
     screening: 'Triagem',
-    interview: 'Entrevista',
+    interview: 'Entrevista', 
     test: 'Teste',
     assessment: 'Avaliação',
     final: 'Final'
@@ -122,14 +85,7 @@ const AssignPanel = () => {
   } as const;
 
   const handleAssignStages = () => {
-    if (!selectedBatch || selectedStages.length === 0) {
-      toast({
-        title: "Erro",
-        description: "Selecione um lote e pelo menos uma etapa",
-        variant: "destructive"
-      });
-      return;
-    }
+    if (!selectedBatch || selectedStages.length === 0) return;
 
     const batch = batches.find(b => b.id === selectedBatch);
     if (!batch) return;
@@ -159,19 +115,10 @@ const AssignPanel = () => {
     setSelectedBatch('');
     setSelectedStages([]);
     setIsDialogOpen(false);
-
-    toast({
-      title: "Sucesso",
-      description: `${newAssignments.length} etapas atribuídas ao lote`
-    });
   };
 
   const handleRemoveAssignment = (batchId: string, stageId: string) => {
     setAssignments(assignments.filter(a => !(a.batchId === batchId && a.stageId === stageId)));
-    toast({
-      title: "Sucesso",
-      description: "Etapa removida do lote"
-    });
   };
 
   const handleToggleStage = (stageId: string) => {
@@ -198,6 +145,16 @@ const AssignPanel = () => {
 
     return grouped;
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="text-lg font-medium">Carregando dados...</div>
+        </div>
+      </div>
+    );
+  }
 
   const assignmentsByBatch = getAssignmentsByBatch();
 
@@ -245,23 +202,20 @@ const AssignPanel = () => {
               <div className="grid gap-2">
                 <label className="text-sm font-medium">Etapas</label>
                 <div className="border rounded-md p-3 space-y-3 max-h-60 overflow-y-auto">
-                  {stages.filter(stage => stage.isActive).map((stage) => {
-                    const Icon = stageTypeIcons[stage.type];
+                  {stages.map((stage) => {
+                    const Icon = stageTypeIcons.screening; // Default icon since we don't have type
                     return (
                       <div key={stage.id} className="flex items-center space-x-3">
                         <Checkbox
                           id={stage.id}
-                          checked={selectedStages.includes(stage.id)}
-                          onCheckedChange={() => handleToggleStage(stage.id)}
+                          checked={selectedStages.includes(stage.id!)}
+                          onCheckedChange={() => handleToggleStage(stage.id!)}
                         />
                         <div className="flex items-center gap-2 flex-1">
                           <Icon className="w-4 h-4 text-muted-foreground" />
                           <label htmlFor={stage.id} className="text-sm font-medium cursor-pointer">
                             {stage.name}
                           </label>
-                          <Badge variant="outline" className="text-xs">
-                            {stageTypeLabels[stage.type]}
-                          </Badge>
                         </div>
                       </div>
                     );
@@ -328,18 +282,13 @@ const AssignPanel = () => {
                     
                     <div className="flex flex-wrap items-center gap-2">
                       {batchAssignments.map((assignment, index) => {
-                        const stage = stages.find(s => s.id === assignment.stageId);
-                        if (!stage) return null;
-                        
-                        const Icon = stageTypeIcons[stage.type];
-                        
                         return (
                           <div key={assignment.id} className="flex items-center gap-2">
                             <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
                               <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10">
                                 <span className="text-xs font-medium">{index + 1}</span>
                               </div>
-                              <Icon className="w-4 h-4 text-muted-foreground" />
+                              <FileText className="w-4 h-4 text-muted-foreground" />
                               <span className="text-sm font-medium">{assignment.stageName}</span>
                               <Button
                                 variant="ghost"
