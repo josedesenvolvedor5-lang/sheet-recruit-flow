@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,21 +17,17 @@ import {
   Filter,
   BarChart3,
   PieChart,
-  Activity
+  Activity,
+  Plus
 } from 'lucide-react';
+import { useFirebase } from '@/hooks/useFirebase';
+import type { Batch } from '@/hooks/useFirebase';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
-interface BatchData {
-  id: string;
-  name: string;
-  jobTitle: string;
-  status: 'planned' | 'active' | 'completed' | 'cancelled';
-  startDate: string;
-  endDate: string;
-  maxCandidates: number;
-  currentCandidates: number;
-  stages: StageProgress[];
-  completionRate: number;
-  averageTime: number;
+interface BatchData extends Batch {
+  stages?: StageProgress[];
 }
 
 interface StageProgress {
@@ -57,100 +53,90 @@ interface CandidateInStage {
 }
 
 const BatchesPanel = () => {
-  const [selectedBatch, setSelectedBatch] = useState<string>('1');
+  const { getBatches, addBatch, deleteBatch } = useFirebase();
+  const [batches, setBatches] = useState<BatchData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedBatch, setSelectedBatch] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [activeTab, setActiveTab] = useState('overview');
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [newBatch, setNewBatch] = useState({
+    name: '',
+    jobTitle: '',
+    status: 'planned' as const,
+    startDate: '',
+    endDate: '',
+    maxCandidates: 0,
+    currentCandidates: 0,
+    completionRate: 0,
+    averageTime: 0
+  });
 
-  const batches: BatchData[] = [
-    {
-      id: '1',
-      name: 'Lote Frontend Q1 2024',
-      jobTitle: 'Desenvolvedor Frontend React',
-      status: 'active',
-      startDate: '2024-02-01',
-      endDate: '2024-02-29',
-      maxCandidates: 20,
-      currentCandidates: 15,
-      completionRate: 65,
-      averageTime: 12,
-      stages: [
-        {
-          id: '1',
-          name: 'Triagem Inicial',
-          type: 'screening',
-          total: 15,
-          approved: 12,
-          rejected: 2,
-          pending: 1,
-          averageDuration: 2
-        },
-        {
-          id: '2',
-          name: 'Entrevista com RH',
-          type: 'interview',
-          total: 12,
-          approved: 9,
-          rejected: 2,
-          pending: 1,
-          averageDuration: 5
-        },
-        {
-          id: '3',
-          name: 'Teste Técnico',
-          type: 'test',
-          total: 9,
-          approved: 6,
-          rejected: 1,
-          pending: 2,
-          averageDuration: 7
-        },
-        {
-          id: '4',
-          name: 'Entrevista Técnica',
-          type: 'interview',
-          total: 6,
-          approved: 4,
-          rejected: 0,
-          pending: 2,
-          averageDuration: 3
+  useEffect(() => {
+    const loadBatches = async () => {
+      try {
+        setLoading(true);
+        const batchesData = await getBatches();
+        setBatches(batchesData);
+        if (batchesData.length > 0 && !selectedBatch) {
+          setSelectedBatch(batchesData[0].id || '');
         }
-      ]
-    },
-    {
-      id: '2',
-      name: 'Lote RH Expansion',
-      jobTitle: 'Analista de RH Sênior',
-      status: 'active',
-      startDate: '2024-02-15',
-      endDate: '2024-03-15',
-      maxCandidates: 10,
-      currentCandidates: 8,
-      completionRate: 40,
-      averageTime: 8,
-      stages: [
-        {
-          id: '1',
-          name: 'Triagem Inicial',
-          type: 'screening',
-          total: 8,
-          approved: 6,
-          rejected: 1,
-          pending: 1,
-          averageDuration: 2
-        },
-        {
-          id: '2',
-          name: 'Entrevista com RH',
-          type: 'interview',
-          total: 6,
-          approved: 4,
-          rejected: 1,
-          pending: 1,
-          averageDuration: 4
-        }
-      ]
+      } catch (error) {
+        console.error('Error loading batches:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadBatches();
+  }, []);
+
+  const handleAddBatch = async () => {
+    try {
+      await addBatch(newBatch);
+      setIsAddDialogOpen(false);
+      setNewBatch({
+        name: '',
+        jobTitle: '',
+        status: 'planned',
+        startDate: '',
+        endDate: '',
+        maxCandidates: 0,
+        currentCandidates: 0,
+        completionRate: 0,
+        averageTime: 0
+      });
+      // Reload batches
+      const batchesData = await getBatches();
+      setBatches(batchesData);
+    } catch (error) {
+      console.error('Error adding batch:', error);
     }
-  ];
+  };
+
+  const handleDeleteBatch = async (batchId: string) => {
+    try {
+      await deleteBatch(batchId);
+      // Reload batches
+      const batchesData = await getBatches();
+      setBatches(batchesData);
+      if (selectedBatch === batchId && batchesData.length > 0) {
+        setSelectedBatch(batchesData[0].id || '');
+      }
+    } catch (error) {
+      console.error('Error deleting batch:', error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="text-lg font-medium">Carregando lotes...</div>
+        </div>
+      </div>
+    );
+  }
 
   const candidatesInStages: CandidateInStage[] = [
     {
@@ -244,6 +230,88 @@ const BatchesPanel = () => {
           <p className="text-muted-foreground">Acompanhe o progresso dos lotes de seleção</p>
         </div>
         <div className="flex gap-4">
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Novo Lote
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Adicionar Novo Lote</DialogTitle>
+                <DialogDescription>
+                  Crie um novo lote de seleção para organizar candidatos.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="name" className="text-right">
+                    Nome
+                  </Label>
+                  <Input
+                    id="name"
+                    value={newBatch.name}
+                    onChange={(e) => setNewBatch({ ...newBatch, name: e.target.value })}
+                    className="col-span-3"
+                    placeholder="Nome do lote"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="jobTitle" className="text-right">
+                    Vaga
+                  </Label>
+                  <Input
+                    id="jobTitle"
+                    value={newBatch.jobTitle}
+                    onChange={(e) => setNewBatch({ ...newBatch, jobTitle: e.target.value })}
+                    className="col-span-3"
+                    placeholder="Título da vaga"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="startDate" className="text-right">
+                    Data Início
+                  </Label>
+                  <Input
+                    id="startDate"
+                    type="date"
+                    value={newBatch.startDate}
+                    onChange={(e) => setNewBatch({ ...newBatch, startDate: e.target.value })}
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="endDate" className="text-right">
+                    Data Fim
+                  </Label>
+                  <Input
+                    id="endDate"
+                    type="date"
+                    value={newBatch.endDate}
+                    onChange={(e) => setNewBatch({ ...newBatch, endDate: e.target.value })}
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="maxCandidates" className="text-right">
+                    Máx. Candidatos
+                  </Label>
+                  <Input
+                    id="maxCandidates"
+                    type="number"
+                    value={newBatch.maxCandidates}
+                    onChange={(e) => setNewBatch({ ...newBatch, maxCandidates: Number(e.target.value) })}
+                    className="col-span-3"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={handleAddBatch}>Adicionar Lote</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <Select value={selectedStatus} onValueChange={setSelectedStatus}>
             <SelectTrigger className="w-[180px]">
               <SelectValue />
@@ -254,21 +322,23 @@ const BatchesPanel = () => {
               ))}
             </SelectContent>
           </Select>
-          <Select value={selectedBatch} onValueChange={setSelectedBatch}>
-            <SelectTrigger className="w-[280px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {batches.map((batch) => (
-                <SelectItem key={batch.id} value={batch.id}>
-                  <div>
-                    <div className="font-medium">{batch.name}</div>
-                    <div className="text-xs text-muted-foreground">{batch.jobTitle}</div>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {batches.length > 0 && (
+            <Select value={selectedBatch} onValueChange={setSelectedBatch}>
+              <SelectTrigger className="w-[280px]">
+                <SelectValue placeholder="Selecione um lote" />
+              </SelectTrigger>
+              <SelectContent>
+                {batches.map((batch) => (
+                  <SelectItem key={batch.id} value={batch.id || ''}>
+                    <div>
+                      <div className="font-medium">{batch.name}</div>
+                      <div className="text-xs text-muted-foreground">{batch.jobTitle}</div>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
 
@@ -340,10 +410,9 @@ const BatchesPanel = () => {
       {/* Batch Details */}
       {currentBatch && (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-            <TabsTrigger value="stages">Etapas</TabsTrigger>
-            <TabsTrigger value="candidates">Candidatos</TabsTrigger>
+            <TabsTrigger value="actions">Ações</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
@@ -382,7 +451,7 @@ const BatchesPanel = () => {
                       {currentBatch.currentCandidates}/{currentBatch.maxCandidates}
                     </div>
                     <Progress 
-                      value={(currentBatch.currentCandidates / currentBatch.maxCandidates) * 100} 
+                      value={currentBatch.maxCandidates > 0 ? (currentBatch.currentCandidates / currentBatch.maxCandidates) * 100 : 0} 
                       className="w-full h-2" 
                     />
                   </div>
@@ -406,115 +475,22 @@ const BatchesPanel = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="stages" className="space-y-4">
-            <div className="grid gap-4">
-              {currentBatch.stages.map((stage, index) => {
-                const Icon = stageTypeIcons[stage.type];
-                const approvalRate = calculateApprovalRate(stage);
-                
-                return (
-                  <Card key={stage.id}>
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10">
-                            <span className="text-sm font-medium">{index + 1}</span>
-                          </div>
-                          <Icon className="w-5 h-5 text-muted-foreground" />
-                          <div>
-                            <h4 className="font-semibold">{stage.name}</h4>
-                            <p className="text-sm text-muted-foreground">
-                              {stage.total} candidatos • {stage.averageDuration} dias médios
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-lg font-bold">{Math.round(approvalRate)}%</div>
-                          <div className="text-xs text-muted-foreground">Aprovação</div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-4 gap-4 text-center">
-                        <div className="space-y-1">
-                          <div className="text-lg font-bold text-blue-600">{stage.total}</div>
-                          <div className="text-xs text-muted-foreground">Total</div>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="text-lg font-bold text-green-600">{stage.approved}</div>
-                          <div className="text-xs text-muted-foreground">Aprovados</div>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="text-lg font-bold text-red-600">{stage.rejected}</div>
-                          <div className="text-xs text-muted-foreground">Rejeitados</div>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="text-lg font-bold text-yellow-600">{stage.pending}</div>
-                          <div className="text-xs text-muted-foreground">Pendentes</div>
-                        </div>
-                      </div>
-
-                      <Progress 
-                        value={stage.total > 0 ? ((stage.approved + stage.rejected) / stage.total) * 100 : 0} 
-                        className="w-full h-2 mt-4" 
-                      />
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="candidates" className="space-y-4">
+          <TabsContent value="actions" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  Candidatos Ativos no Processo
-                </CardTitle>
+                <CardTitle>Gerenciar Lote</CardTitle>
                 <CardDescription>
-                  Candidatos atualmente em diferentes etapas do processo
+                  Ações disponíveis para este lote
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {candidatesInStages.map((candidate) => {
-                    const StatusIcon = getStatusIcon(candidate.status);
-                    return (
-                      <div key={candidate.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted">
-                            <Users className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="font-medium">{candidate.name}</div>
-                            <div className="text-sm text-muted-foreground">{candidate.email}</div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                          <div className="text-center">
-                            <div className="text-sm font-medium">{candidate.stageName}</div>
-                            <div className="text-xs text-muted-foreground">
-                              Desde {new Date(candidate.entryDate).toLocaleDateString()}
-                              {candidate.duration && ` • ${candidate.duration} dias`}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <StatusIcon className={`w-4 h-4 ${getStatusColor(candidate.status)}`} />
-                            <Badge variant="outline" className={getStatusColor(candidate.status)}>
-                              {candidate.status === 'approved' ? 'Aprovado' : 
-                               candidate.status === 'rejected' ? 'Rejeitado' : 'Pendente'}
-                            </Badge>
-                          </div>
-
-                          <Button variant="ghost" size="sm">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <Button 
+                    variant="destructive" 
+                    onClick={() => handleDeleteBatch(currentBatch.id || '')}
+                  >
+                    Excluir Lote
+                  </Button>
                 </div>
               </CardContent>
             </Card>

@@ -78,6 +78,20 @@ export interface CandidateNote {
   createdBy?: string;
 }
 
+export interface Batch {
+  id?: string;
+  name: string;
+  jobTitle: string;
+  status: 'planned' | 'active' | 'completed' | 'cancelled';
+  startDate: string;
+  endDate: string;
+  maxCandidates: number;
+  currentCandidates: number;
+  completionRate: number;
+  averageTime: number;
+  createdAt: Date;
+}
+
 export const useFirebase = () => {
   const { toast } = useToast();
 
@@ -401,6 +415,64 @@ export const useFirebase = () => {
     }
   };
 
+  // Batch operations
+  const addBatch = async (batchData: Omit<Batch, 'id' | 'createdAt'>) => {
+    try {
+      const docRef = await addDoc(collection(db, 'batches'), {
+        ...batchData,
+        createdAt: Timestamp.now()
+      });
+      toast({ title: "Lote criado com sucesso!" });
+      return docRef.id;
+    } catch (error) {
+      console.error('Error adding batch:', error);
+      toast({ title: "Erro ao criar lote", variant: "destructive" });
+      throw error;
+    }
+  };
+
+  const getBatches = async (): Promise<Batch[]> => {
+    try {
+      const querySnapshot = await getDocs(
+        query(collection(db, 'batches'), orderBy('createdAt', 'desc'))
+      );
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() || new Date()
+      })) as Batch[];
+    } catch (error) {
+      console.error('Error getting batches:', error);
+      toast({ title: "Erro ao carregar lotes", variant: "destructive" });
+      return [];
+    }
+  };
+
+  const updateBatch = async (id: string, updates: Partial<Batch>) => {
+    try {
+      await updateDoc(doc(db, 'batches', id), {
+        ...updates,
+        updatedAt: Timestamp.now()
+      });
+      toast({ title: "Lote atualizado com sucesso!" });
+    } catch (error) {
+      console.error('Error updating batch:', error);
+      toast({ title: "Erro ao atualizar lote", variant: "destructive" });
+      throw error;
+    }
+  };
+
+  const deleteBatch = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'batches', id));
+      toast({ title: "Lote removido com sucesso!" });
+    } catch (error) {
+      console.error('Error deleting batch:', error);
+      toast({ title: "Erro ao remover lote", variant: "destructive" });
+      throw error;
+    }
+  };
+
   return {
     // Candidates
     addCandidate,
@@ -424,6 +496,11 @@ export const useFirebase = () => {
     // Candidate Notes
     addCandidateNote,
     getCandidateNotes,
+    // Batches
+    addBatch,
+    getBatches,
+    updateBatch,
+    deleteBatch,
     // Files
     uploadResume
   };
